@@ -1,0 +1,112 @@
+import tensorflow as tf
+from tensorflow.python.framework import graph_util
+from tensorflow.examples.tutorials.mnist import input_data
+
+mnist = input_data.read_data_sets("MNIST_data",one_hot=True)
+
+pb_file_path = "save_model/mnist_model.pb"
+#
+batch_size = 100
+n_batch = mnist.train.num_examples // batch_size
+
+x = tf.placeholder(tf.float32, [None,784],name='input')
+y = tf.placeholder(tf.float32, [None, 10],name='y_input')
+keep_prob = tf.placeholder(tf.float32,name='keep_prob')
+lr = tf.Variable(0.01,dtype = tf.float32)
+
+# 创建神经网络
+W1 = tf.Variable(tf.truncated_normal([784,800],stddev=0.1))
+b1 = tf.Variable(tf.zeros([800])+0.1)
+# 激活层
+layer1 = tf.nn.relu(tf.matmul(x,W1) + b1)
+# drop层
+layer1 = tf.nn.dropout(layer1,keep_prob=keep_prob)
+
+# 第二层
+W2 = tf.Variable(tf.truncated_normal([800,500],stddev=0.1))
+b2 = tf.Variable(tf.zeros([500])+0.1)
+layer2 = tf.nn.relu(tf.matmul(layer1,W2) + b2)
+layer2 = tf.nn.dropout(layer2,keep_prob=keep_prob)
+
+# 第三层
+W3 = tf.Variable(tf.truncated_normal([500,10],stddev=0.1))
+b3 = tf.Variable(tf.zeros([10])+0.1)
+# prediction = tf.nn.softmax(tf.matmul(layer2,W3) + b3)
+prediction = tf.matmul(layer2,W3) + b3
+
+#计算损失
+loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=prediction))
+
+# 优化算法
+# train_step = tf.train.GradientDescentOptimizer(lr).minimize(loss)
+# train_step = tf.train.AdadeltaOptimizer(lr).minimize(loss)
+# train_step = tf.train.AdamOptimizer(lr).minimize(loss)
+# train_step = tf.train.RMSPropOptimizer(learning_rate=0.001).minimize(loss)
+train_step = tf.train.AdagradOptimizer(0.01).minimize(loss)
+
+
+# 初始化变量
+
+
+prediction_2 = tf.nn.softmax(prediction,name='softmax')
+# 得到一个布尔型列表，存放结果是否正确
+correct_prediction = tf.equal(tf.argmax(y,1), tf.argmax(prediction_2,1)) #argmax 返回一维张量中最大值索引
+
+# 求准确率
+accuracy = tf.reduce_mean(tf.cast(correct_prediction,tf.float32),name='accuracy') # 把布尔值转换为浮点型求平均数
+
+
+'''
+训练mnist数据集并生成ckpt和pb模型
+'''
+# saver = tf.train.Saver()
+#
+# with tf.Session() as sess:
+#     init = tf.global_variables_initializer()
+#     sess.run(init)
+#     for epoch in range(5):
+#         sess.run(tf.assign(lr, 0.01*(0.98**epoch)))
+#         for batch in range(n_batch):
+#             # 获得批次数据
+#             batch_xs, batch_ys = mnist.train.next_batch(batch_size)
+#             sess.run(train_step, feed_dict={x:batch_xs, y:batch_ys, keep_prob:1.0})
+#         learning_rate = sess.run(lr)
+#         acc = sess.run(accuracy, feed_dict={x:mnist.test.images,y:mnist.test.labels,keep_prob:1.0} )
+#         print("Iter " + str(epoch) + " Testing Accuracy: " + str(acc)+ ",  lr: "+ str(learning_rate))
+#     saver.save(sess, "save_model/mnist_model.ckpt")
+#     constant_graph = graph_util.convert_variables_to_constants(sess, sess.graph_def, ['accuracy'])
+#     with tf.gfile.FastGFile(pb_file_path, mode='wb') as f:
+#         f.write(constant_graph.SerializeToString())
+#
+
+'''
+加载ckpt模型并计算识别准确率
+'''
+# with tf.Session() as sess:
+#     sess.run(init)
+#     saver.restore(sess,"save_model/mnist_model.ckpt")
+#     print(sess.run(accuracy,feed_dict={x:mnist.test.images,y:mnist.test.labels,keep_prob:1.0}))
+'''
+加载pb模型并计算识别准确率
+'''
+with tf.Graph().as_default():
+    output_graph_def = tf.GraphDef()
+    #sess.graph.add_to_collection("input", mnist.test.images)
+
+    with open(pb_file_path, "rb") as f:
+        output_graph_def.ParseFromString(f.read())
+        _ = tf.import_graph_def(output_graph_def, name="")
+
+
+    with tf.Session() as sess:
+        init = tf.global_variables_initializer()
+        sess.run(init)
+        input_x = sess.graph.get_tensor_by_name("input:0")
+        input_y = sess.graph.get_tensor_by_name("y_input:0")
+        keep_prob1 = sess.graph.get_tensor_by_name("keep_prob:0")
+        # output = sess.graph.get_tensor_by_name("softmax:0")
+        accuracy = sess.graph.get_tensor_by_name("accuracy:0")
+        print(sess.run(accuracy, feed_dict={input_x: mnist.test.images, input_y: mnist.test.labels, keep_prob1: 1.0}))
+
+
+
