@@ -1,3 +1,8 @@
+'''
+time:1205
+author: chenzhaowen
+'''
+
 import tensorflow as tf
 from tensorflow.python.framework import graph_util
 from tensorflow.examples.tutorials.mnist import input_data
